@@ -1,0 +1,763 @@
+<!--
+  =======================================
+  VISOR INTERACTIVO DE HERENCIA Y POLIMORFISMO — v2 (HTML AUTOCONTENIDO)
+  =======================================
+
+  🧭 Resumen de uso (para el/la profe):
+  - Panel derecho:
+      1) Elija Java o PlantUML.
+      2) Abra el ícono ⓘ para ver un ejemplo mínimo del formato.
+      3) Pegue la definición de UNA clase en el área de texto.
+      4) Presione "Agregar" para validarla y registrarla.
+      5) Arrastre la clase del listado al canvas.
+  - Canvas izquierdo:
+      - Mueva libremente los nodos UML.
+      - Las relaciones se deducen automáticamente:
+          • Herencia (is-a): triángulo hueco + línea AZUL con etiqueta “is-a”.
+          • Composición (has-a): rombo negro + línea VERDE más gruesa con etiqueta “has-a”.
+      - Las etiquetas se recolocan al mover nodos.
+
+  🧩 Notas técnicas:
+  - Estilos: Tailwind (CDN).
+  - Drag & drop: API nativa.
+  - Visualización: nodos HTML + líneas SVG con marcadores y etiquetas.
+  - Validación: parsers ligeros por expresiones regulares (no evalúa cuerpos de métodos).
+  - Todo en un solo archivo .html (además del CDN de Tailwind).
+-->
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Herencia y Polimorfismo — Visor Interactivo UML (v2)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind desde CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Marcadores (flechas/rombos) para el SVG */
+    svg#links defs marker path { vector-effect: non-scaling-stroke; }
+    /* Selección del nodo al arrastrar */
+    .uml-node.dragging { opacity: 0.9; box-shadow: 0 8px 20px rgb(0 0 0 / 0.15); }
+    .uml-node .titlebar { cursor: move; user-select: none; }
+    /* Lista arrastrable: feedback visual */
+    .draggable-item { cursor: grab; }
+    .draggable-item:active { cursor: grabbing; }
+    /* Canvas “zona de drop” */
+    #canvas.drop-target { outline: 2px dashed #94a3b8; outline-offset: -6px; }
+
+    /* Etiquetas sobre las aristas */
+    .edge-label { font-size: 11px; fill: #0f172a; paint-order: stroke; stroke: white; stroke-width: 3px; }
+    /* (opcional) más contraste al hover de un nodo */
+    .uml-node:hover { box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+  <!-- Header -->
+  <header class="border-b bg-white">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center gap-3">
+      <h1 class="text-xl font-semibold">Herencia y Polimorfismo — Visor Interactivo UML</h1>
+      <span class="text-xs text-slate-500">POO • Programación 1</span>
+      <span class="ml-auto text-[11px] text-slate-400">v2</span>
+    </div>
+  </header>
+
+  <!-- Layout principal -->
+  <main class="mx-auto max-w-7xl px-4 py-4">
+    <div class="grid grid-cols-12 gap-4">
+      <!-- IZQUIERDA: Canvas -->
+      <section class="col-span-12 lg:col-span-8">
+        <div id="canvasWrapper" class="relative h-[70vh] min-h-[460px] rounded-2xl border bg-white">
+          <!-- SVG para las líneas (detrás de los nodos) -->
+          <svg id="links" class="absolute inset-0 w-full h-full pointer-events-none">
+            <defs>
+              <!-- Triángulo hueco para HERENCIA (al final de la línea) -->
+              <marker id="inheritanceHead" markerWidth="22" markerHeight="22" refX="20" refY="11" orient="auto">
+                <path d="M22 11 L0 0 L0 22 Z" fill="white" stroke="black" stroke-width="1.8"></path>
+              </marker>
+              <!-- Rombo negro para COMPOSICIÓN (al inicio de la línea) -->
+              <marker id="compositionTail" markerWidth="20" markerHeight="20" refX="0" refY="10" orient="auto">
+                <path d="M10 0 L20 10 L10 20 L0 10 Z" fill="black" stroke="black"></path>
+              </marker>
+            </defs>
+          </svg>
+
+          <!-- Leyenda -->
+          <div class="absolute top-2 right-2 bg-white/85 backdrop-blur rounded-md border px-2 py-1 text-[11px] leading-tight z-10">
+            <div class="flex items-center gap-2">
+              <svg width="38" height="12" class="shrink-0"><line x1="0" y1="6" x2="34" y2="6" stroke="#1e40af" stroke-width="2.0"/></svg>
+              <span>is-a (Herencia)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <svg width="38" height="12" class="shrink-0"><line x1="0" y1="6" x2="34" y2="6" stroke="#047857" stroke-width="2.4"/></svg>
+              <span>has-a (Composición)</span>
+            </div>
+          </div>
+
+          <!-- Contenedor del canvas (nodos) -->
+          <div id="canvas" class="absolute inset-0 overflow-hidden rounded-2xl"></div>
+
+          <!-- Ayuda flotante -->
+          <div class="absolute bottom-2 left-2 text-xs text-slate-500 bg-white/80 px-2 py-1 rounded">
+            Arrastre clases desde el panel derecho hacia aquí. Mueva los nodos para reorganizar el diagrama.
+          </div>
+        </div>
+      </section>
+
+      <!-- DERECHA: Panel -->
+      <aside class="col-span-12 lg:col-span-4">
+        <div class="rounded-2xl border bg-white p-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">Panel de Entrada</h2>
+          </div>
+
+          <!-- Selector & Info -->
+          <div class="flex items-center gap-2">
+            <label for="mode" class="text-sm font-medium">Formato:</label>
+            <select id="mode" class="rounded-lg border px-2 py-1 text-sm">
+              <option>Java</option>
+              <option>PlantUML</option>
+            </select>
+
+            <!-- Tooltip / Modal simple -->
+            <button id="infoBtn" class="ml-auto text-slate-600 hover:text-slate-900" title="Ver ejemplo">
+              ⓘ
+            </button>
+          </div>
+
+          <!-- Ejemplos -->
+          <div id="examples" class="hidden text-xs bg-slate-50 border rounded-lg p-3 space-y-2">
+            <div data-for="Java">
+<pre class="whitespace-pre-wrap text-[11px] leading-tight">
+class Vehicle {
+  private int speed;
+  public void accelerate(int amount) {}
+}
+
+class Car extends Vehicle {
+  private Engine engine;
+  public void start() {}
+}
+</pre>
+              <p class="text-[11px] text-slate-600">• Herencia: <code>class Car extends Vehicle</code><br>• Composición: atributo cuyo tipo es otra clase registrada (p.ej. <code>Engine engine;</code>).</p>
+            </div>
+            <div data-for="PlantUML" class="hidden">
+<pre class="whitespace-pre-wrap text-[11px] leading-tight">
+class Vehicle {
+  speed : int
+  +accelerate(amount : int) : void
+}
+
+class Car extends Vehicle {
+  engine : Engine
+  +start() : void
+}
+</pre>
+              <p class="text-[11px] text-slate-600">• Herencia: <code>class Sub extends Super</code><br>• Composición: atributo cuyo tipo coincide con otra clase registrada.</p>
+            </div>
+          </div>
+
+          <!-- Área de texto -->
+          <div>
+            <label for="inputText" class="text-sm font-medium">Definición de la clase</label>
+            <textarea id="inputText" rows="10" class="mt-1 w-full rounded-lg border p-2 font-mono text-sm" placeholder="Pegue aquí la definición de su clase (Java o PlantUML, según el modo seleccionado)"></textarea>
+            <p id="status" class="mt-2 text-xs"></p>
+          </div>
+
+          <!-- Botón Agregar -->
+          <div class="flex items-center gap-2">
+            <button id="addBtn" class="rounded-lg bg-indigo-600 px-3 py-2 text-white text-sm hover:bg-indigo-700">Agregar</button>
+            <button id="clearBtn" class="ml-auto rounded-lg border px-3 py-2 text-sm hover:bg-slate-100">Limpiar canvas</button>
+          </div>
+
+          <!-- Listado de clases -->
+          <div>
+            <h3 class="text-sm font-semibold mb-2">Clases registradas</h3>
+            <ul id="classList" class="space-y-1"></ul>
+            <p class="text-xs text-slate-500 mt-2">Arrastre un ítem hacia el canvas para crear/posicionar el nodo UML.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    // ============================================================
+    //  ESTADO Y UTILIDADES
+    // ============================================================
+    const model = { classes: new Map() }; // Map<string, ClassDef>
+
+    // DOM refs
+    const modeSel   = document.getElementById('mode');
+    const infoBtn   = document.getElementById('infoBtn');
+    const examples  = document.getElementById('examples');
+    const inputText = document.getElementById('inputText');
+    const statusEl  = document.getElementById('status');
+    const addBtn    = document.getElementById('addBtn');
+    const clearBtn  = document.getElementById('clearBtn');
+    const classList = document.getElementById('classList');
+    const canvas    = document.getElementById('canvas');
+    const linksSvg  = document.getElementById('links');
+
+    // Nodos presentes en el canvas: Map<className, HTMLElement>
+    const nodesOnCanvas = new Map();
+
+    // Aristas actuales: key -> { line: SVGLineElement, label: SVGTextElement }
+    const edgesRendered = new Map();
+
+    const sanitizeId = (name) => name.replace(/[^\w\-]/g, '_');
+
+    // Helpers para status
+    function setStatus(msg, type = 'info') {
+      const base = 'mt-2 text-xs';
+      const classes = {
+        info:  'text-slate-600',
+        ok:    'text-green-700',
+        warn:  'text-amber-700',
+        error: 'text-red-700'
+      };
+      statusEl.className = base + ' ' + (classes[type] || classes.info);
+      statusEl.textContent = msg;
+    }
+
+    // Mostrar ejemplo según modo
+    function refreshExample() {
+      const mode = modeSel.value;
+      [...examples.children].forEach(div => {
+        const forMode = div.getAttribute('data-for');
+        div.classList.toggle('hidden', forMode !== mode);
+      });
+    }
+
+    infoBtn.addEventListener('click', () => {
+      examples.classList.toggle('hidden');
+      if (!examples.classList.contains('hidden')) refreshExample();
+    });
+
+    modeSel.addEventListener('change', () => {
+      if (!examples.classList.contains('hidden')) refreshExample();
+    });
+
+    // ============================================================
+    //  PARSERS Y VALIDACIÓN (simple / pedagógico)
+    // ============================================================
+    function preprocess(text) {
+      return text.replace(/\/\/.*$/gm, '').trim();
+    }
+
+    function extractClassBlock(text, keyword = 'class') {
+      const headerMatch = text.match(new RegExp(`${keyword}\\s+([A-Za-z_][\\w]*)\\s*(?:extends\\s+([A-Za-z_][\\w]*))?\\s*\\{`));
+      if (!headerMatch) return null;
+      const name = headerMatch[1];
+      const parent = headerMatch[2] || null;
+      const startIdx = text.indexOf('{', headerMatch.index);
+      const endIdx = text.lastIndexOf('}');
+      if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) return null;
+      const body = text.slice(startIdx + 1, endIdx);
+      return { name, parent, body };
+    }
+
+    // --- Parser Java ---
+    function parseJava(text) {
+      const errors = [];
+      const raw = text;
+      text = preprocess(text);
+
+      const block = extractClassBlock(text, 'class');
+      if (!block) {
+        errors.push('No se encontró una clase Java con llaves "{ }".');
+        return { ok: false, errors };
+      }
+
+      const { name, parent, body } = block;
+      const attrs = [];
+      const methods = [];
+
+      const lines = body.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+      for (let line of lines) {
+        line = line.replace(/\/\/.*$/, '').trim();
+        if (!line) continue;
+
+        const isMethod = /\([^\)]*\)\s*(\{|;)$/.test(line) || /\([^\)]*\)\s*$/.test(line);
+        if (isMethod) {
+          const m = line.match(/^(?:public|private|protected)?\s*(?:static\s+)?([A-Za-z_][\w<>\[\]]*|void)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/);
+          if (!m) {
+            errors.push(`No se pudo interpretar método: "${line}"`);
+          } else {
+            const returnType = m[1];
+            const mname = m[2];
+            const paramsRaw = m[3].trim();
+            const params = [];
+            if (paramsRaw.length > 0) {
+              for (const p of paramsRaw.split(',')) {
+                const pp = p.trim();
+                const mm = pp.match(/^([A-Za-z_][\w<>\[\]]*)\s+([A-Za-z_]\w*)$/);
+                if (mm) params.push({ type: mm[1], name: mm[2] });
+                else params.push({ type: '<?>', name: pp });
+              }
+            }
+            methods.push({ name: mname, returnType, params });
+          }
+          continue;
+        }
+
+        if (!line.endsWith(';')) {
+          errors.push(`Línea sin ";" (posible atributo): "${line}"`);
+          continue;
+        }
+        let cleaned = line.replace(/^(public|private|protected)\s+/, '')
+                          .replace(/\b(static|final)\b\s+/g, '')
+                          .replace(/;$/, '')
+                          .trim();
+
+        const firstSpace = cleaned.indexOf(' ');
+        if (firstSpace === -1) {
+          errors.push(`No se pudo determinar tipo y nombre en: "${line}"`);
+          continue;
+        }
+        const type = cleaned.slice(0, firstSpace).trim();
+        const rest = cleaned.slice(firstSpace + 1).trim();
+        const names = rest.split(',').map(s => s.trim());
+        for (const n of names) {
+          const mm = n.match(/^([A-Za-z_]\w*)(\s*=\s*.+)?$/);
+          if (!mm) errors.push(`Nombre de atributo inválido en: "${n}"`);
+          else attrs.push({ name: mm[1], type });
+        }
+      }
+
+      if (attrs.length === 0 && methods.length === 0) errors.push('Debe definir al menos un atributo o un método.');
+      if (errors.length > 0) return { ok: false, errors };
+
+      return {
+        ok: true,
+        classDef: { name, extends: parent, attrs, methods, source: 'java', raw }
+      };
+    }
+
+    // --- Parser PlantUML ---
+    function parsePlantUML(text) {
+      const errors = [];
+      const raw = text;
+      text = preprocess(text);
+
+      const block = extractClassBlock(text, 'class');
+      if (!block) {
+        errors.push('No se encontró "class Nombre { ... }".');
+        return { ok: false, errors };
+      }
+      const { name, parent, body } = block;
+
+      const attrs = [];
+      const methods = [];
+
+      const lines = body.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+      for (let line of lines) {
+        if (line === '__' || line === '==') continue;
+
+        const isMethod = /\([^\)]*\)/.test(line);
+        if (isMethod) {
+          const m = line.match(/^([+\-#~])?\s*([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?::\s*([A-Za-z_][\w<>\[\]]*))?/);
+          if (!m) {
+            errors.push(`No se pudo interpretar método: "${line}"`);
+          } else {
+            const mname = m[2];
+            const paramsRaw = m[3].trim();
+            const returnType = (m[4] || 'void');
+            const params = [];
+            if (paramsRaw.length > 0) {
+              for (const p of paramsRaw.split(',')) {
+                const pp = p.trim();
+                let type = '<?>', pname = 'param';
+                let mm = pp.match(/^([A-Za-z_]\w*)\s*:\s*([A-Za-z_][\w<>\[\]]*)$/);
+                if (mm) { pname = mm[1]; type = mm[2]; }
+                else {
+                  mm = pp.match(/^([A-Za-z_][\w<>\[\]]*)\s+([A-Za-z_]\w*)$/);
+                  if (mm) { type = mm[1]; pname = mm[2]; }
+                }
+                params.push({ name: pname, type });
+              }
+            }
+            methods.push({ name: mname, returnType, params });
+          }
+          continue;
+        }
+
+        // Atributo: "name : Type"  o  "Type name"
+        let aname = null, atype = null;
+        let mm = line.match(/^([+\-#~])?\s*([A-Za-z_]\w*)\s*:\s*([A-Za-z_][\w<>\[\]]*)\s*$/);
+        if (mm) { aname = mm[2]; atype = mm[3]; }
+        else {
+          mm = line.match(/^([+\-#~])?\s*([A-Za-z_][\w<>\[\]]*)\s+([A-Za-z_]\w*)\s*$/);
+          if (mm) { atype = mm[2]; aname = mm[3]; }
+        }
+        if (aname && atype) attrs.push({ name: aname, type: atype });
+        else errors.push(`No se pudo interpretar atributo: "${line}"`);
+      }
+
+      if (attrs.length === 0 && methods.length === 0) errors.push('Debe definir al menos un atributo o un método.');
+      if (errors.length > 0) return { ok: false, errors };
+
+      return {
+        ok: true,
+        classDef: { name, extends: parent, attrs, methods, source: 'plantuml', raw }
+      };
+    }
+
+    function parseByMode(text, mode) {
+      return (mode === 'Java') ? parseJava(text) : parsePlantUML(text);
+    }
+
+    // ============================================================
+    //  GESTIÓN DE CLASES (modelo) Y LISTA
+    // ============================================================
+    function upsertClass(classDef) {
+      const exists = model.classes.has(classDef.name);
+      model.classes.set(classDef.name, classDef);
+      renderClassList();
+      return exists;
+    }
+
+    function renderClassList() {
+      classList.innerHTML = '';
+      const names = [...model.classes.keys()].sort((a, b) => a.localeCompare(b));
+      for (const name of names) {
+        const li = document.createElement('li');
+        li.className = 'draggable-item flex items-center gap-2 rounded-lg border px-2 py-1 bg-white hover:bg-slate-50';
+        li.draggable = true;
+        li.dataset.className = name;
+
+        const badge = document.createElement('span');
+        badge.className = 'inline-flex items-center justify-center rounded-md bg-slate-100 text-slate-700 text-xs px-1.5 py-0.5';
+        badge.textContent = 'Clase';
+
+        const span = document.createElement('span');
+        span.className = 'font-medium';
+        span.textContent = name;
+
+        const del = document.createElement('button');
+        del.className = 'ml-auto text-xs text-slate-500 hover:text-red-600';
+        del.title = 'Eliminar de la lista';
+        del.textContent = '✕';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeNodeIfExists(name);
+          model.classes.delete(name);
+          renderClassList();
+          recomputeAndRenderEdges();
+        });
+
+        li.appendChild(badge);
+        li.appendChild(span);
+        li.appendChild(del);
+
+        // Drag desde listado
+        li.addEventListener('dragstart', (ev) => {
+          ev.dataTransfer.setData('text/plain', name);
+          canvas.classList.add('drop-target');
+        });
+        li.addEventListener('dragend', () => {
+          canvas.classList.remove('drop-target');
+        });
+
+        classList.appendChild(li);
+      }
+    }
+
+    // ============================================================
+    //  CANVAS: DROP DE CLASES Y NODOS UML
+    // ============================================================
+    canvas.addEventListener('dragover', (ev) => ev.preventDefault());
+    canvas.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      canvas.classList.remove('drop-target');
+      const name = ev.dataTransfer.getData('text/plain');
+      if (!model.classes.has(name)) {
+        setStatus(`La clase "${name}" no está en el modelo.`, 'warn');
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      ensureNodeForClass(name, x, y);
+      recomputeAndRenderEdges();
+    });
+
+    function removeNodeIfExists(name) {
+      const node = nodesOnCanvas.get(name);
+      if (node) {
+        node.remove();
+        nodesOnCanvas.delete(name);
+      }
+      // Quitar edges relacionados
+      for (const [key, obj] of [...edgesRendered.entries()]) {
+        if (key.startsWith(name + '->') || key.includes('->' + name + ':')) {
+          obj.line.remove();
+          obj.label.remove();
+          edgesRendered.delete(key);
+        }
+      }
+    }
+
+    function ensureNodeForClass(name, x = 40, y = 40) {
+      if (nodesOnCanvas.has(name)) {
+        moveNode(nodesOnCanvas.get(name), x, y);
+        return;
+      }
+      const def = model.classes.get(name);
+      if (!def) return;
+
+      const node = createUmlNode(def);
+      canvas.appendChild(node);
+
+      node.style.left = Math.max(0, Math.min(x - node.offsetWidth / 2, canvas.clientWidth  - node.offsetWidth)) + 'px';
+      node.style.top  = Math.max(0, Math.min(y - 16,                    canvas.clientHeight - node.offsetHeight)) + 'px';
+
+      nodesOnCanvas.set(name, node);
+    }
+
+    function createUmlNode(classDef) {
+      const node = document.createElement('div');
+      node.className = 'uml-node absolute w-64 rounded-xl border bg-white shadow-sm';
+      node.id = 'node_' + sanitizeId(classDef.name);
+      node.dataset.className = classDef.name;
+
+      const title = document.createElement('div');
+      title.className = 'titlebar rounded-t-xl bg-slate-100 px-3 py-1.5 text-sm font-semibold flex items-center justify-between';
+      title.innerHTML = `<span>${classDef.name}</span><span class="text-[10px] text-slate-500">${classDef.source === 'java' ? 'Java' : 'PlantUML'}</span>`;
+      node.appendChild(title);
+
+      const body = document.createElement('div');
+      body.className = 'px-3 py-2 text-xs';
+      const attrsList = classDef.attrs.map(a => `<li><code>${a.name}: ${a.type}</code></li>`).join('');
+      const methodsList = classDef.methods.map(m => {
+        const params = m.params.map(p => `${p.name}: ${p.type}`).join(', ');
+        return `<li><code>${m.name}(${params}): ${m.returnType}</code></li>`;
+      }).join('');
+      body.innerHTML = `
+        ${classDef.extends ? `<div class="mb-1 text-[11px] text-slate-600">extends <code>${classDef.extends}</code></div>` : ''}
+        <div class="border-t pt-1">
+          <div class="font-semibold uppercase tracking-wide text-[10px] text-slate-500 mb-1">Atributos</div>
+          <ul class="space-y-0.5">${attrsList || '<li class="text-slate-400">—</li>'}</ul>
+        </div>
+        <div class="border-t mt-2 pt-1">
+          <div class="font-semibold uppercase tracking-wide text-[10px] text-slate-500 mb-1">Métodos</div>
+          <ul class="space-y-0.5">${methodsList || '<li class="text-slate-400">—</li>'}</ul>
+        </div>
+      `;
+      node.appendChild(body);
+
+      // Drag manual simple
+      let isDown = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+      const onMouseDown = (ev) => {
+        if (ev.button !== 0) return;
+        isDown = true;
+        node.classList.add('dragging');
+        const rect = node.getBoundingClientRect();
+        const crect = canvas.getBoundingClientRect();
+        startX = ev.clientX;
+        startY = ev.clientY;
+        startLeft = rect.left - crect.left;
+        startTop  = rect.top - crect.top;
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      };
+      const onMouseMove = (ev) => {
+        if (!isDown) return;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        const newLeft = Math.max(0, Math.min(startLeft + dx, canvas.clientWidth - node.offsetWidth));
+        const newTop  = Math.max(0, Math.min(startTop  + dy, canvas.clientHeight - node.offsetHeight));
+        node.style.left = newLeft + 'px';
+        node.style.top  = newTop  + 'px';
+        updateEdgesForNode(classDef.name);
+      };
+      const onMouseUp = () => {
+        isDown = false;
+        node.classList.remove('dragging');
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+      node.addEventListener('mousedown', onMouseDown);
+
+      return node;
+    }
+
+    function moveNode(node, x, y) {
+      node.style.left = Math.max(0, Math.min(x - node.offsetWidth / 2, canvas.clientWidth  - node.offsetWidth)) + 'px';
+      node.style.top  = Math.max(0, Math.min(y - 16,                    canvas.clientHeight - node.offsetHeight)) + 'px';
+      updateEdgesForNode(node.dataset.className);
+    }
+
+    // ============================================================
+    //  RELACIONES Y RENDER DE LÍNEAS (v2 con colores y etiquetas)
+    // ============================================================
+    function recomputeAndRenderEdges() {
+      const needed = new Set(); // claves esperadas
+
+      for (const [name] of nodesOnCanvas.entries()) {
+        const def = model.classes.get(name);
+        if (!def) continue;
+
+        // Herencia: Sub -> Super (triángulo hueco al final — en Super)
+        if (def.extends && nodesOnCanvas.has(def.extends)) {
+          const key = `${name}->${def.extends}:inheritance`;
+          needed.add(key);
+          ensureEdge(key, name, def.extends, 'inheritance');
+        }
+
+        // Composición: A tiene un B (rombo en A)
+        for (const a of def.attrs) {
+          if (nodesOnCanvas.has(a.type)) {
+            const key = `${name}->${a.type}:composition`;
+            needed.add(key);
+            ensureEdge(key, name, a.type, 'composition');
+          }
+        }
+      }
+
+      // Eliminar líneas que ya no son necesarias
+      for (const [key, obj] of [...edgesRendered.entries()]) {
+        if (!needed.has(key)) {
+          obj.line.remove();
+          obj.label.remove();
+          edgesRendered.delete(key);
+        }
+      }
+
+      // Actualizar posiciones
+      for (const key of edgesRendered.keys()) updateEdgePosition(key);
+    }
+
+    function ensureEdge(key, from, to, type) {
+      if (edgesRendered.has(key)) return;
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('stroke-width', type === 'composition' ? '2.4' : '2.0');
+      if (type === 'inheritance') {
+        line.setAttribute('stroke', '#1e40af');              // azul
+        line.setAttribute('marker-end', 'url(#inheritanceHead)');
+      } else {
+        line.setAttribute('stroke', '#047857');              // verde
+        line.setAttribute('marker-start', 'url(#compositionTail)');
+        // (Opcional) estilo punteado: line.setAttribute('stroke-dasharray', '6 3');
+      }
+      line.dataset.key = key;
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('class', 'edge-label');
+      text.textContent = (type === 'inheritance') ? 'is-a' : 'has-a';
+
+      linksSvg.appendChild(line);
+      linksSvg.appendChild(text);
+
+      edgesRendered.set(key, { line, label: text });
+      updateEdgePosition(key);
+    }
+
+    function centerOfNode(name) {
+      const node = nodesOnCanvas.get(name);
+      const nrect = node.getBoundingClientRect();
+      const crect = canvas.getBoundingClientRect();
+      const cx = (nrect.left - crect.left) + nrect.width / 2;
+      const cy = (nrect.top  - crect.top ) + nrect.height / 2;
+      return { x: cx, y: cy };
+    }
+
+    function updateEdgePosition(key) {
+      const [left, right] = key.split(':')[0].split('->');
+      const edge = edgesRendered.get(key);
+      if (!edge || !nodesOnCanvas.has(left) || !nodesOnCanvas.has(right)) return;
+
+      const { line, label } = edge;
+      const p1 = centerOfNode(left);
+      const p2 = centerOfNode(right);
+
+      line.setAttribute('x1', p1.x);
+      line.setAttribute('y1', p1.y);
+      line.setAttribute('x2', p2.x);
+      line.setAttribute('y2', p2.y);
+
+      // Punto medio y normal para separar la etiqueta de la línea
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      const offset = 12;
+      label.setAttribute('x', mx + nx * offset);
+      label.setAttribute('y', my + ny * offset);
+    }
+
+    function updateEdgesForNode(name) {
+      for (const key of edgesRendered.keys()) {
+        if (key.startsWith(name + '->') || key.includes('->' + name + ':')) {
+          updateEdgePosition(key);
+        }
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      for (const key of edgesRendered.keys()) updateEdgePosition(key);
+    });
+
+    // ============================================================
+    //  ACCIONES: AGREGAR / LIMPIAR
+    // ============================================================
+    addBtn.addEventListener('click', () => {
+      const text = inputText.value.trim();
+      if (!text) {
+        setStatus('Ingrese una definición de clase.', 'warn');
+        return;
+      }
+      const mode = modeSel.value;
+      const res = parseByMode(text, mode);
+      if (!res.ok) {
+        setStatus('Errores:\n- ' + res.errors.join('\n- '), 'error');
+        return;
+      }
+      const existed = upsertClass(res.classDef);
+      setStatus(`${existed ? 'Clase actualizada' : 'Clase agregada'}: "${res.classDef.name}". Arrástrela al canvas.`, 'ok');
+    });
+
+    clearBtn.addEventListener('click', () => {
+      // Vaciar solo el canvas (nodos y líneas), conservar listado/modelo
+      for (const node of nodesOnCanvas.values()) node.remove();
+      nodesOnCanvas.clear();
+      for (const obj of edgesRendered.values()) { obj.line.remove(); obj.label.remove(); }
+      edgesRendered.clear();
+      setStatus('Canvas limpiado. Las clases continúan disponibles en el listado.', 'info');
+    });
+
+    // ============================================================
+    //  ARRANQUE (semillas demo)
+    // ============================================================
+    (function seed() {
+      const javaVehicle = `
+class Vehicle {
+  protected int speed;
+  public void accelerate(int amount) {}
+  public void brake() {}
+}`;
+      const javaEngine = `
+class Engine {
+  private int horsepower;
+  public void ignite() {}
+}`;
+      const javaCar = `
+class Car extends Vehicle {
+  private Engine engine;
+  public void start() {}
+}`;
+      for (const code of [javaVehicle, javaEngine, javaCar]) {
+        const { ok, classDef } = parseJava(code);
+        if (ok) model.classes.set(classDef.name, classDef);
+      }
+      renderClassList();
+      ensureNodeForClass('Vehicle', 180, 140);
+      ensureNodeForClass('Car', 420, 260);
+      ensureNodeForClass('Engine', 640, 120);
+      recomputeAndRenderEdges();
+    })();
+  </script>
+</body>
+</html>
