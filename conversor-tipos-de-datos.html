@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Casting Visualizer - Binario a Decimal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            padding: 30px;
+            background: #f8f9ff;
+            border-bottom: 2px solid #e1e5e9;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .input-group label {
+            font-weight: bold;
+            color: #2a5298;
+            min-width: 120px;
+        }
+
+        .input-group input {
+            padding: 12px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-family: 'JetBrains Mono', monospace;
+            min-width: 200px;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-group input:focus {
+            border-color: #2a5298;
+            outline: none;
+        }
+
+        .convert-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .convert-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .results {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+
+        .type-card {
+            background: white;
+            border: 2px solid #e1e5e9;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .type-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .type-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .type-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #2a5298;
+        }
+
+        .type-info {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .decimal-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #1a5f1a;
+            margin-bottom: 15px;
+            text-align: center;
+            background: #f0fff0;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .binary-container {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .binary-value {
+            font-size: 0.9rem;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.6;
+            word-break: break-all;
+            color: #ffffff;
+        }
+
+        .sign-bit {
+            background-color: #ff6b6b !important;
+            color: white !important;
+            font-weight: bold;
+        }
+
+        .exponent-bits {
+            background-color: #4ecdc4 !important;
+            color: white !important;
+            font-weight: bold;
+        }
+
+        .mantissa-bits {
+            background-color: #45b7d1 !important;
+            color: white !important;
+            font-weight: bold;
+        }
+
+        .bit {
+            display: inline-block;
+            margin: 1px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            background-color: #333;
+        }
+
+        .bit-legend {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+        }
+
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+        .overflow-warning {
+            background: #fff3cd;
+            border: 2px solid #ffeaa7;
+            color: #856404;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        .info-section {
+            background: #f8f9ff;
+            padding: 30px;
+            border-top: 2px solid #e1e5e9;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .info-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #2a5298;
+        }
+
+        .info-card h3 {
+            color: #2a5298;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .input-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .input-group label {
+                min-width: auto;
+            }
+
+            .results {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🔢 Java Casting Visualizer</h1>
+        <p>Convierte números decimales y observa cómo se representan en diferentes tipos de datos Java</p>
+    </div>
+
+    <div class="controls">
+        <div class="input-group">
+            <label for="numberInput">Número Decimal:</label>
+            <input type="number" id="numberInput" placeholder="Ejemplo: 42, -123, 3.14159" step="any">
+            <button class="convert-btn" onclick="convertNumber()">🔄 Convertir y Mostrar</button>
+        </div>
+    </div>
+
+    <div class="results" id="results">
+        <!-- Los resultados se generarán aquí -->
+    </div>
+
+    <div class="info-section">
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>📊 Tipos Enteros</h3>
+                <p><strong>byte:</strong> 8 bits (-128 a 127)</p>
+                <p><strong>short:</strong> 16 bits (-32,768 a 32,767)</p>
+                <p><strong>int:</strong> 32 bits (-2,147,483,648 a 2,147,483,647)</p>
+                <p><strong>long:</strong> 64 bits (rango muy amplio)</p>
+            </div>
+            <div class="info-card">
+                <h3>🌊 Tipos Flotantes</h3>
+                <p><strong>float:</strong> 32 bits (IEEE 754)</p>
+                <p><strong>double:</strong> 64 bits (IEEE 754)</p>
+                <p>Formato: [Signo][Exponente][Mantisa]</p>
+            </div>
+            <div class="info-card">
+                <h3>🎨 Leyenda de Colores</h3>
+                <p><span style="background: #ff6b6b; color: white; padding: 2px 6px; border-radius: 3px;">Rojo</span> = Bit de signo</p>
+                <p><span style="background: #4ecdc4; color: white; padding: 2px 6px; border-radius: 3px;">Verde</span> = Exponente</p>
+                <p><span style="background: #45b7d1; color: white; padding: 2px 6px; border-radius: 3px;">Azul</span> = Mantisa</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function convertNumber() {
+        const input = document.getElementById('numberInput');
+        const value = parseFloat(input.value);
+
+        if (isNaN(value)) {
+            alert('Por favor ingresa un número válido');
+            return;
+        }
+
+        const resultsContainer = document.getElementById('results');
+        resultsContainer.innerHTML = '';
+
+        // Crear tarjetas para cada tipo
+        createTypeCard('byte', value, 8, true);
+        createTypeCard('short', value, 16, true);
+        createTypeCard('int', value, 32, true);
+        createTypeCard('long', value, 64, true);
+        createTypeCard('float', value, 32, false);
+        createTypeCard('double', value, 64, false);
+    }
+
+    function createTypeCard(typeName, originalValue, bits, isInteger) {
+        const resultsContainer = document.getElementById('results');
+        const card = document.createElement('div');
+        card.className = 'type-card';
+
+        let convertedValue, binaryRep, hasOverflow = false;
+
+        if (isInteger) {
+            const result = convertToInteger(originalValue, bits, typeName);
+            convertedValue = result.value;
+            binaryRep = result.binary;
+            hasOverflow = result.overflow;
+        } else {
+            const result = convertToFloat(originalValue, bits);
+            convertedValue = result.value;
+            binaryRep = result.binary;
+        }
+
+        const typeInfo = getTypeInfo(typeName);
+
+        card.innerHTML = `
+            <div class="type-header">
+                <span class="type-name">${typeName}</span>
+                <span class="type-info">${typeInfo}</span>
+            </div>
+
+            <div class="decimal-value">
+                ${convertedValue}
+            </div>
+
+            <div class="binary-container">
+                <div class="binary-value">${binaryRep}</div>
+            </div>
+
+            ${!isInteger ? createFloatLegend() : ''}
+
+            ${hasOverflow ? `<div class="overflow-warning">⚠️ Overflow detectado! El valor excede el rango del tipo ${typeName}</div>` : ''}
+        `;
+
+        resultsContainer.appendChild(card);
+    }
+
+    function convertToInteger(value, bits, typeName) {
+        const intValue = Math.trunc(value);
+        const maxValue = Math.pow(2, bits - 1) - 1;
+        const minValue = -Math.pow(2, bits - 1);
+
+        let finalValue = intValue;
+        let overflow = false;
+
+        if (intValue > maxValue || intValue < minValue) {
+            overflow = true;
+            // Simular overflow con complemento a dos
+            finalValue = ((intValue % Math.pow(2, bits)) + Math.pow(2, bits)) % Math.pow(2, bits);
+            if (finalValue >= Math.pow(2, bits - 1)) {
+                finalValue -= Math.pow(2, bits);
+            }
+        }
+
+        const binary = generateIntegerBinary(finalValue, bits);
+
+        return {
+            value: finalValue,
+            binary: binary,
+            overflow: overflow
+        };
+    }
+
+    function generateIntegerBinary(value, bits) {
+        let binary;
+        if (value >= 0) {
+            binary = value.toString(2).padStart(bits, '0');
+        } else {
+            // Complemento a dos
+            binary = ((Math.pow(2, bits) + value)).toString(2);
+        }
+
+        // Colorear el bit de signo y agrupar en bytes (grupos de 8)
+        let coloredBinary = '';
+        for (let i = 0; i < binary.length; i++) {
+            const bit = binary[i];
+
+            // Agregar espacio cada 8 bits para separar bytes
+            if (i > 0 && i % 8 === 0) {
+                coloredBinary += ' ';
+            }
+
+            if (i === 0) {
+                coloredBinary += `<span class="bit sign-bit">${bit}</span>`;
+            } else {
+                coloredBinary += `<span class="bit">${bit}</span>`;
+            }
+        }
+
+        return coloredBinary;
+    }
+
+    function convertToFloat(value, bits) {
+        let convertedValue;
+        if (bits === 32) {
+            const buffer = new ArrayBuffer(4);
+            const view = new DataView(buffer);
+            view.setFloat32(0, value);
+            convertedValue = view.getFloat32(0);
+        } else {
+            convertedValue = value; // double precision
+        }
+
+        const binary = generateFloatBinary(convertedValue, bits);
+
+        return {
+            value: convertedValue,
+            binary: binary
+        };
+    }
+
+    function generateFloatBinary(value, bits) {
+        const buffer = new ArrayBuffer(8);
+        const view = new DataView(buffer);
+
+        if (bits === 32) {
+            view.setFloat32(0, value);
+            const intBits = view.getUint32(0);
+            const binary = intBits.toString(2).padStart(32, '0');
+            return colorFloatBinary(binary, 32);
+        } else {
+            view.setFloat64(0, value);
+            const intBitsHigh = view.getUint32(0);
+            const intBitsLow = view.getUint32(4);
+            const binaryHigh = intBitsHigh.toString(2).padStart(32, '0');
+            const binaryLow = intBitsLow.toString(2).padStart(32, '0');
+            const binary = binaryHigh + binaryLow;
+            return colorFloatBinary(binary, 64);
+        }
+    }
+
+    function colorFloatBinary(binary, bits) {
+        let coloredBinary = '';
+        const exponentBits = bits === 32 ? 8 : 11;
+        const mantissaBits = bits === 32 ? 23 : 52;
+
+        for (let i = 0; i < binary.length; i++) {
+            const bit = binary[i];
+
+            // Agregar espacio cada 8 bits para separar bytes
+            if (i > 0 && i % 8 === 0) {
+                coloredBinary += ' ';
+            }
+
+            if (i === 0) {
+                coloredBinary += `<span class="bit sign-bit">${bit}</span>`;
+            } else if (i <= exponentBits) {
+                coloredBinary += `<span class="bit exponent-bits">${bit}</span>`;
+            } else {
+                coloredBinary += `<span class="bit mantissa-bits">${bit}</span>`;
+            }
+        }
+
+        return coloredBinary;
+    }
+
+    function createFloatLegend() {
+        return `
+            <div class="bit-legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ff6b6b;"></div>
+                    <span>Signo</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #4ecdc4;"></div>
+                    <span>Exponente</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #45b7d1;"></div>
+                    <span>Mantisa</span>
+                </div>
+            </div>
+        `;
+    }
+
+    function getTypeInfo(typeName) {
+        const info = {
+            'byte': '8 bits (-128 a 127)',
+            'short': '16 bits (-32,768 a 32,767)',
+            'int': '32 bits (-2,147,483,648 a 2,147,483,647)',
+            'long': '64 bits (rango muy amplio)',
+            'float': '32 bits IEEE 754 (6-7 dígitos)',
+            'double': '64 bits IEEE 754 (15-17 dígitos)'
+        };
+        return info[typeName] || '';
+    }
+
+    // Convertir un número de ejemplo al cargar la página
+    document.getElementById('numberInput').value = '42';
+    convertNumber();
+</script>
+</body>
+</html>
